@@ -4,6 +4,7 @@ app:
   team_name: Team Alpha
   team_members: [Alice, Bob]
   contact_email: team@example.com
+  production: true
   host: 0.0.0.0
   port: 8080
 

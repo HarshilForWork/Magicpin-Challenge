@@ -1,8 +1,12 @@
+import sys
 import uvicorn
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+if __name__ == "__main__" and __package__ is None:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 load_dotenv(Path(__file__).with_name(".env"))
 
@@ -32,7 +36,7 @@ app.include_router(metadata.router)
 
 if __name__ == "__main__":
     uvicorn.run(
-        "main:app",
+        app,
         host=settings["app"]["host"],
         port=settings["app"]["port"],
         reload=False,

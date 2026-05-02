@@ -1,9 +1,11 @@
 import os
 import json
+import time
 
 from groq import AsyncGroq
 
 from vera_bot.core.config import settings
+from vera_bot.utils.tokenizer import count_completion_tokens, count_prompt_tokens, estimate_total_cost
 
 _client = None
 
@@ -31,15 +33,32 @@ def _get_client() -> AsyncGroq:
 
 
 async def classify_intent(message: str) -> str:
-    response = await _get_client().chat.completions.create(
-        model=settings["llm"]["model"],
-        max_completion_tokens=10,
-        temperature=0,
-        messages=[
-            {"role": "system", "content": INTENT_SYSTEM},
-            {"role": "user", "content": message},
-        ],
+    start = time.monotonic()
+    print(f"[intent] start len={len(message)}")
+    try:
+        response = await _get_client().chat.completions.create(
+            model=settings["llm"]["model"],
+            max_completion_tokens=10,
+            temperature=0,
+            messages=[
+                {"role": "system", "content": INTENT_SYSTEM},
+                {"role": "user", "content": message},
+            ],
+        )
+    except Exception as exc:
+        duration = time.monotonic() - start
+        print(f"[intent] error after {duration:.2f}s: {exc}")
+        raise
+    duration = time.monotonic() - start
+    usage = getattr(response, "usage", None)
+    prompt_tokens = getattr(usage, "prompt_tokens", None) if usage else None
+    completion_tokens = getattr(usage, "completion_tokens", None) if usage else None
+    print(
+        "[intent] done "
+        f"t={duration:.2f}s "
+        f"prompt_tokens={prompt_tokens} completion_tokens={completion_tokens}"
     )
+
     content = response.choices[0].message.content if response.choices else None
     if not content:
         # Debug: log raw response shape when the model returns no content.
@@ -52,4 +71,26 @@ async def classify_intent(message: str) -> str:
     label = content.strip().lower()
     if label not in ("accept", "reject", "question", "offtopic", "unclear"):
         return "unclear"
+    
+    # Log intent classification with token metrics
+    if settings["mlflow"]["log_prompts"] and not settings.get("app", {}).get("production", False):
+        import mlflow
+        from datetime import datetime
+        usage = getattr(response, "usage", None)
+        prompt_tokens = getattr(usage, "prompt_tokens", None) if usage else None
+        completion_tokens = getattr(usage, "completion_tokens", None) if usage else None
+        if prompt_tokens is None:
+            prompt_tokens = count_prompt_tokens(INTENT_SYSTEM, message)
+        if completion_tokens is None:
+            completion_tokens = count_completion_tokens(content)
+        cost_breakdown = estimate_total_cost(prompt_tokens, completion_tokens)
+        with mlflow.start_run(run_name=f"intent_{label}_{datetime.utcnow().isoformat()}"):
+            mlflow.log_param("intent_label", label)
+            mlflow.log_param("model", settings["llm"]["model"])
+            mlflow.log_text(message, "merchant_message.txt")
+            mlflow.log_metric("prompt_tokens", prompt_tokens)
+            mlflow.log_metric("completion_tokens", completion_tokens)
+            mlflow.log_metric("total_tokens", cost_breakdown["total_tokens"])
+            mlflow.log_metric("total_cost_usd", cost_breakdown["total_cost"])
+    
     return label

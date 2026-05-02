@@ -1,3 +1,5 @@
+import asyncio
+import time
 from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter
@@ -15,8 +17,52 @@ import vera_bot.core.state as state
 router = APIRouter()
 
 
+async def _log_judge_reply_async(
+    conversation_id: str,
+    merchant_id: str,
+    message: str,
+    detected_intent: str,
+    bot_action: str,
+    bot_body: str,
+):
+    try:
+        await asyncio.to_thread(
+            log_judge_reply,
+            conversation_id,
+            merchant_id,
+            message,
+            detected_intent,
+            bot_action,
+            bot_body,
+        )
+    except Exception as exc:
+        print(f"[reply] log_judge_reply error: {exc}")
+
+
+def _log_judge_reply_bg(
+    conversation_id: str,
+    merchant_id: str,
+    message: str,
+    detected_intent: str,
+    bot_action: str,
+    bot_body: str,
+):
+    asyncio.create_task(
+        _log_judge_reply_async(
+            conversation_id,
+            merchant_id,
+            message,
+            detected_intent,
+            bot_action,
+            bot_body,
+        )
+    )
+
+
 @router.post("/v1/reply", response_model=ReplyResponse)
 async def reply(body: ReplyRequest):
+    start = time.monotonic()
+    print(f"[reply] start conv={body.conversation_id} len={len(body.message)}")
     conv = await state.get_conversation(body.conversation_id)
     timestamp = datetime.now(timezone.utc).isoformat()
     merchant_id = body.merchant_id or (conv.get("merchant_id") if conv else None)
@@ -30,7 +76,7 @@ async def reply(body: ReplyRequest):
                 "body": body.message,
                 "timestamp": timestamp,
             })
-        log_judge_reply(
+        _log_judge_reply_bg(
             body.conversation_id,
             merchant_id or "",
             body.message,
@@ -38,6 +84,7 @@ async def reply(body: ReplyRequest):
             result["action"],
             result.get("body", ""),
         )
+        print(f"[reply] done t={time.monotonic() - start:.2f}s action={result['action']}")
         return ReplyResponse(**result)
 
     intent = await classify_intent(body.message)
@@ -45,7 +92,8 @@ async def reply(body: ReplyRequest):
     if not conv or not merchant_id:
         if intent == "accept":
             response_body = "Great, proceeding now. Next step: confirm the best time to start."
-            log_judge_reply(body.conversation_id, merchant_id or "", body.message, intent, "send", response_body)
+            _log_judge_reply_bg(body.conversation_id, merchant_id or "", body.message, intent, "send", response_body)
+            print(f"[reply] done t={time.monotonic() - start:.2f}s action=send")
             return ReplyResponse(
                 action="send",
                 body=response_body,
@@ -53,11 +101,13 @@ async def reply(body: ReplyRequest):
                 rationale="No prior context; moving to action after acceptance.",
             )
         if intent == "reject":
-            log_judge_reply(body.conversation_id, merchant_id or "", body.message, intent, "end", "")
+            _log_judge_reply_bg(body.conversation_id, merchant_id or "", body.message, intent, "end", "")
+            print(f"[reply] done t={time.monotonic() - start:.2f}s action=end")
             return ReplyResponse(action="end", body="", rationale="Merchant opted out.")
         if intent == "offtopic":
             response_body = "Noted. When you're ready, we can continue from where we left off."
-            log_judge_reply(body.conversation_id, merchant_id or "", body.message, intent, "send", response_body)
+            _log_judge_reply_bg(body.conversation_id, merchant_id or "", body.message, intent, "send", response_body)
+            print(f"[reply] done t={time.monotonic() - start:.2f}s action=send")
             return ReplyResponse(
                 action="send",
                 body=response_body,
@@ -65,7 +115,8 @@ async def reply(body: ReplyRequest):
                 rationale="Off-topic response without context.",
             )
         response_body = "Thanks. Share a bit more so I can proceed."
-        log_judge_reply(body.conversation_id, merchant_id or "", body.message, intent, "send", response_body)
+        _log_judge_reply_bg(body.conversation_id, merchant_id or "", body.message, intent, "send", response_body)
+        print(f"[reply] done t={time.monotonic() - start:.2f}s action=send")
         return ReplyResponse(
             action="send",
             body=response_body,
@@ -86,7 +137,8 @@ async def reply(body: ReplyRequest):
         until = (datetime.now(timezone.utc) + timedelta(days=suppress_days)).isoformat()
         await state.suppress(merchant_id, "merchant", "opted_out", until, timestamp)
         await state.set_conversation_status(body.conversation_id, "ended")
-        log_judge_reply(body.conversation_id, merchant_id or "", body.message, "reject", "end", "")
+        _log_judge_reply_bg(body.conversation_id, merchant_id or "", body.message, "reject", "end", "")
+        print(f"[reply] done t={time.monotonic() - start:.2f}s action=end")
         return ReplyResponse(action="end", body="", rationale="Merchant opted out. Suppressing.")
 
     if intent == "offtopic":
@@ -98,6 +150,7 @@ async def reply(body: ReplyRequest):
             "action": "send",
             "timestamp": timestamp,
         })
+        print(f"[reply] done t={time.monotonic() - start:.2f}s action=send")
         return ReplyResponse(
             action="send",
             body=response_body,
@@ -136,7 +189,9 @@ async def reply(body: ReplyRequest):
         "timestamp": timestamp,
     })
 
-    log_judge_reply(body.conversation_id, merchant_id, body.message, intent, "send", body_text)
+    _log_judge_reply_bg(body.conversation_id, merchant_id, body.message, intent, "send", body_text)
+
+    print(f"[reply] done t={time.monotonic() - start:.2f}s action=send")
 
     return ReplyResponse(
         action="send",

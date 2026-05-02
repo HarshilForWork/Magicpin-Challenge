@@ -7,6 +7,7 @@ Requires=docker.service
 Restart=always
 RestartSec=5
 ExecStartPre=-/usr/bin/docker rm -f vera-bot
+ExecStartPre=/usr/bin/bash -c 'set -e; keep=3; ids=$(docker images --filter "label=org.opencontainers.image.revision" --format "{{.ID}}" | uniq); if [ -z "$ids" ]; then exit 0; fi; remove=$(echo "$ids" | tail -n +$((keep+1))); if [ -n "$remove" ]; then docker rmi -f $remove; fi'
 ExecStart=/usr/bin/docker run --name vera-bot --env-file /etc/vera_bot/.env -p 8080:8080 ghcr.io/harshilforwork/magicpin-challenge:main
 ExecStop=/usr/bin/docker stop vera-bot
 

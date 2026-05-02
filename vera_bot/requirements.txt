@@ -10,3 +10,4 @@ mlflow
 pyyaml
 httpx
 python-toon
+tiktoken

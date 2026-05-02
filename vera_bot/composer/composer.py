@@ -9,6 +9,7 @@ from vera_bot.composer.context import build_toon_context
 from vera_bot.composer.prompts import get_system_prompt
 from vera_bot.core.config import settings
 from vera_bot.core.logging import log_composition, log_validation_failure
+from vera_bot.utils.tokenizer import count_completion_tokens, count_prompt_tokens
 
 _client = None
 
@@ -108,20 +109,33 @@ CTA_TYPE: open_ended | binary_yes_no | binary_confirm_cancel | multi_choice_slot
 
         raw = response.choices[0].message.content or ""
         body, rationale = parse_output(raw)
+        full_user_prompt = user_prompt + retry_note
+        full_prompt = f"SYSTEM:\n{system_prompt}\n\nUSER:\n{full_user_prompt}".strip()
 
         valid, reason = validate(body)
 
         if valid:
+            usage = getattr(response, "usage", None)
+            prompt_tokens = getattr(usage, "prompt_tokens", None) if usage else None
+            completion_tokens = getattr(usage, "completion_tokens", None) if usage else None
+            if prompt_tokens is None:
+                prompt_tokens = count_prompt_tokens(system_prompt, full_user_prompt)
+            if completion_tokens is None:
+                completion_tokens = count_completion_tokens(raw)
+
             log_composition(
                 trigger_kind=trigger.get("kind", ""),
                 merchant_id=merchant.get("merchant_id", ""),
-                prompt=user_prompt,
+                prompt=full_user_prompt,
                 filtered_context=filtered,
                 output=body,
                 rationale=rationale,
                 model=settings["llm"]["model"],
-                prompt_tokens=response.usage.prompt_tokens,
-                completion_tokens=response.usage.completion_tokens,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                system_prompt=system_prompt,
+                input_context=toon_ctx,
+                full_prompt=full_prompt,
             )
             return body, rationale
 
