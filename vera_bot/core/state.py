@@ -1,4 +1,4 @@
-import core.db as db
+import vera_bot.core.db as db
 from datetime import datetime, timezone
 
 # ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@ from datetime import datetime
 
 import mlflow
 
-from core.config import settings
+from vera_bot.core.config import settings
 
 
 def setup_mlflow():

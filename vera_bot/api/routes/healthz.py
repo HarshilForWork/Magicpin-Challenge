@@ -2,7 +2,7 @@ import time
 
 from fastapi import APIRouter
 
-import core.state as state
+import vera_bot.core.state as state
 
 router = APIRouter()
 START = time.time()

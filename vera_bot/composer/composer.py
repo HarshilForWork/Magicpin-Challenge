@@ -5,10 +5,10 @@ from datetime import datetime
 
 from groq import AsyncGroq
 
-from composer.context import build_toon_context
-from composer.prompts import get_system_prompt
-from core.config import settings
-from core.logging import log_composition, log_validation_failure
+from vera_bot.composer.context import build_toon_context
+from vera_bot.composer.prompts import get_system_prompt
+from vera_bot.core.config import settings
+from vera_bot.core.logging import log_composition, log_validation_failure
 
 _client = None
 

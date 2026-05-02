@@ -3,7 +3,7 @@ import json
 
 from groq import AsyncGroq
 
-from core.config import settings
+from vera_bot.core.config import settings
 
 _client = None
 

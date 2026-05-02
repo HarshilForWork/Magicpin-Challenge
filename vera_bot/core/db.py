@@ -1,6 +1,6 @@
 import motor.motor_asyncio
 from pymongo import ReturnDocument
-from core.config import settings
+from vera_bot.core.config import settings
 
 client = None
 db = None

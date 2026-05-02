@@ -2,9 +2,9 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter
 
-from models.requests import ContextRequest
-from models.responses import ContextAccepted
-import core.state as state
+from vera_bot.models.requests import ContextRequest
+from vera_bot.models.responses import ContextAccepted
+import vera_bot.core.state as state
 
 router = APIRouter()
 

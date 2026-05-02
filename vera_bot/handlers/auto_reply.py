@@ -22,7 +22,7 @@ async def handle_auto_reply(
     State machine for auto-replies.
     Returns the appropriate action dict.
     """
-    from core.config import settings
+    from vera_bot.core.config import settings
 
     if merchant_id:
         count = await db_module.increment_auto_reply_for_merchant(merchant_id)

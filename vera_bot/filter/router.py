@@ -1,4 +1,4 @@
-from filter.functions import (
+from vera_bot.filter.functions import (
     filter_for_research_digest,
     filter_for_regulation_change,
     filter_for_cde_opportunity,

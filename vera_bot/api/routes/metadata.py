@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from core.config import settings
+from vera_bot.core.config import settings
 
 router = APIRouter()
 

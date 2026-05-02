@@ -2,13 +2,13 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter
 
-from composer.composer import compose, parse_cta
-from core.logging import log_filter_result
-from filter.router import route_filter
-from models.requests import TickRequest
-from models.responses import Action, TickResponse
-import core.db as db
-import core.state as state
+from vera_bot.composer.composer import compose, parse_cta
+from vera_bot.core.logging import log_filter_result
+from vera_bot.filter.router import route_filter
+from vera_bot.models.requests import TickRequest
+from vera_bot.models.responses import Action, TickResponse
+import vera_bot.core.db as db
+import vera_bot.core.state as state
 
 router = APIRouter()
 

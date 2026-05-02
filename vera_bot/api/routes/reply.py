@@ -2,15 +2,15 @@ from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter
 
-from composer.composer import compose
-from core.config import settings
-from core.logging import log_judge_reply
-from filter.router import route_filter
-from handlers.auto_reply import is_auto_reply, handle_auto_reply
-from handlers.intent import classify_intent
-from models.requests import ReplyRequest
-from models.responses import ReplyResponse
-import core.state as state
+from vera_bot.composer.composer import compose
+from vera_bot.core.config import settings
+from vera_bot.core.logging import log_judge_reply
+from vera_bot.filter.router import route_filter
+from vera_bot.handlers.auto_reply import is_auto_reply, handle_auto_reply
+from vera_bot.handlers.intent import classify_intent
+from vera_bot.models.requests import ReplyRequest
+from vera_bot.models.responses import ReplyResponse
+import vera_bot.core.state as state
 
 router = APIRouter()
 
