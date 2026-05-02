@@ -37,17 +37,65 @@ def build_toon_context(
     """
     ctx: dict = {}
 
+    identity = merchant.get("identity", {}) or {}
+    performance = merchant.get("performance", {}) or {}
+    subscription = merchant.get("subscription", {}) or {}
+    customer_agg = merchant.get("customer_aggregate", {}) or {}
+
+    review_summary = []
+    for item in (merchant.get("review_themes") or [])[:2]:
+        if isinstance(item, dict):
+            review_summary.append({
+                "theme": item.get("theme"),
+                "sentiment": item.get("sentiment"),
+                "occurrences_30d": item.get("occurrences_30d"),
+                "common_quote": item.get("common_quote"),
+            })
+
     # Merchant -- only the fields the LLM needs
     ctx["merchant"] = _clean({
-        "name": merchant.get("identity", {}).get("name"),
-        "locality": merchant.get("identity", {}).get("locality"),
-        "city": merchant.get("identity", {}).get("city"),
-        "languages": merchant.get("identity", {}).get("languages"),
-        "ctr": merchant.get("performance", {}).get("ctr"),
+        "name": identity.get("name"),
+        "owner_first_name": identity.get("owner_first_name"),
+        "locality": identity.get("locality"),
+        "city": identity.get("city"),
+        "languages": identity.get("languages"),
+        "verified": identity.get("verified"),
+        "established_year": identity.get("established_year"),
         "signals": merchant.get("signals"),
-        "subscription_days_remaining": merchant.get("subscription", {}).get("days_remaining"),
-        "lapsed_patients": merchant.get("customer_aggregate", {}).get("lapsed_180d_plus"),
-        "high_risk_adult_count": merchant.get("customer_aggregate", {}).get("high_risk_adult_count"),
+        "ctr": performance.get("ctr"),
+        "performance": {
+            "views": performance.get("views"),
+            "calls": performance.get("calls"),
+            "directions": performance.get("directions"),
+            "leads": performance.get("leads"),
+            "ctr": performance.get("ctr"),
+            "delta_7d": performance.get("delta_7d"),
+            "window_days": performance.get("window_days"),
+        },
+        "subscription": {
+            "status": subscription.get("status"),
+            "plan": subscription.get("plan"),
+            "days_remaining": subscription.get("days_remaining"),
+            "days_since_expiry": subscription.get("days_since_expiry"),
+            "renewed_at": subscription.get("renewed_at"),
+        },
+        "customer_aggregate": {
+            "total_unique_ytd": customer_agg.get("total_unique_ytd"),
+            "total_active_members": customer_agg.get("total_active_members"),
+            "lapsed_90d_plus": customer_agg.get("lapsed_90d_plus"),
+            "lapsed_180d_plus": customer_agg.get("lapsed_180d_plus"),
+            "retention_3mo_pct": customer_agg.get("retention_3mo_pct"),
+            "retention_6mo_pct": customer_agg.get("retention_6mo_pct"),
+            "repeat_customer_pct": customer_agg.get("repeat_customer_pct"),
+            "monthly_churn_pct": customer_agg.get("monthly_churn_pct"),
+            "delivery_orders_30d": customer_agg.get("delivery_orders_30d"),
+            "dine_in_orders_30d": customer_agg.get("dine_in_orders_30d"),
+            "delivery_share_pct": customer_agg.get("delivery_share_pct"),
+            "trial_to_paid_pct": customer_agg.get("trial_to_paid_pct"),
+            "high_risk_adult_count": customer_agg.get("high_risk_adult_count"),
+            "chronic_rx_count": customer_agg.get("chronic_rx_count"),
+        },
+        "review_themes": review_summary,
     })
 
     # Trigger

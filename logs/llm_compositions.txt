@@ -1,0 +1,256 @@
+-----
+time_utc: 2026-05-02T14:31:16.367741
+trigger_kind: active_planning_intent
+merchant_id: m_006_southindiancafe_restaurant_bangalore
+model: llama-3.3-70b-versatile
+prompt_tokens: 784
+completion_tokens: 138
+total_tokens: 922
+input_context:
+merchant:
+  name: Mylari South Indian Cafe
+  owner_first_name: Suresh
+  locality: Indiranagar
+  city: Bangalore
+  languages[3]: en,hi,kn
+  verified: true
+  established_year: 2014
+  signals[3]: high_volume,stable_growth,engaged_in_last_24h
+  ctr: 0.032
+  performance:
+    views: 12400
+    calls: 88
+    directions: 320
+    leads: 145
+    ctr: 0.032
+    delta_7d:
+      views_pct: 0.05
+      calls_pct: 0.02
+    window_days: 30
+  subscription:
+    status: active
+    plan: Pro
+    days_remaining: 240
+  customer_aggregate:
+    total_unique_ytd: 4200
+    repeat_customer_pct: 0.42
+    delivery_share_pct: 0.45
+  review_themes[2,]{theme,sentiment,occurrences_30d}:
+    thali_quality,pos,22
+    weekend_busy,neg,3
+trigger:
+  kind: active_planning_intent
+  urgency: 4
+  intent_topic: corporate_bulk_thali_package
+  merchant_last_message: "Yes good idea, what would it look like"
+available_offers[1,]{id,title,status,started}:
+  o_mylari_001,Weekday Lunch Thali @ â‚¹149,active,2026-01-10
+output_body:
+Your cafe, Mylari South Indian Cafe, has seen a 0.05% increase in views over the last 7 days, with 12400 views in the last 30 days. What do you think is driving this growth? I can help you draft a plan to build on this momentum, especially with your Weekday Lunch Thali @ ₹149 offer, Reply YES/NO
+rationale:
+This message fits the context because it references a specific statistic from the merchant's account, invites a reply with a question, and offers to help with a plan, all while avoiding taboo words and including a clear call-to-action.
+-----
+time_utc: 2026-05-02T14:31:17.118786
+trigger_kind: active_planning_intent
+merchant_id: m_008_zenyoga_gym_chennai
+model: llama-3.3-70b-versatile
+prompt_tokens: 802
+completion_tokens: 129
+total_tokens: 931
+input_context:
+merchant:
+  name: Zen Yoga Studio
+  owner_first_name: Padma
+  locality: Mylapore
+  city: Chennai
+  languages[3]: en,ta,hi
+  verified: true
+  established_year: 2017
+  signals[3]: high_retention,active_planning,boutique_segment
+  ctr: 0.062
+  performance:
+    views: 880
+    calls: 18
+    directions: 38
+    leads: 12
+    ctr: 0.062
+    delta_7d:
+      views_pct: 0.1
+      calls_pct: 0.15
+    window_days: 30
+  subscription:
+    status: active
+    plan: Pro
+    days_remaining: 180
+  customer_aggregate:
+    total_active_members: 95
+    monthly_churn_pct: 0.05
+    trial_to_paid_pct: 0.55
+  review_themes[2,]{theme,sentiment,occurrences_30d}:
+    instructor_quality,pos,9
+    small_classes,pos,6
+trigger:
+  kind: active_planning_intent
+  urgency: 4
+  intent_topic: kids_yoga_summer_camp
+  merchant_last_message: Hi I want to add a kids yoga program â€” what should it look like?
+available_offers[2,]{id,title,status,started}:
+  o_zen_001,First Month @ â‚¹499,active,2026-03-01
+  o_zen_002,Free Body Composition Analysis,active,2026-03-01
+output_body:
+Your Zen Yoga Studio has seen a 15% increase in calls over the past 7 days, with 18 calls in the last 30 days. What inspired this surge in interest, and are you considering new programs like the kids yoga summer camp you mentioned earlier? I can help draft a plan for your new kids yoga program, Reply YES/NO
+rationale:
+This message fits the context because it references a specific, recent metric from the merchant's account, sparks curiosity about the cause of the increase, and offers assistance with a new program, leveraging the active_planning_intent trigger.
+-----
+time_utc: 2026-05-02T14:31:17.770886
+trigger_kind: appointment_tomorrow
+merchant_id: m_019_karim_salon_lucknow
+model: llama-3.3-70b-versatile
+prompt_tokens: 707
+completion_tokens: 109
+total_tokens: 816
+input_context:
+merchant:
+  name: Karim's Salon
+  owner_first_name: Karim
+  locality: Alambagh
+  city: Lucknow
+  languages[2]: en,hi
+  verified: true
+  established_year: 2013
+  ctr: 0.038
+  performance:
+    views: 756
+    calls: 2
+    directions: 31
+    leads: 1
+    ctr: 0.038
+    delta_7d:
+      views_pct: 0.26
+      calls_pct: 0.23
+    window_days: 30
+  subscription:
+    status: active
+    plan: Pro
+    days_remaining: 9
+  customer_aggregate:
+    total_unique_ytd: 1509
+trigger:
+  kind: appointment_tomorrow
+  urgency: 2
+  placeholder: true
+  metric_or_topic: appointment_tomorrow
+customer:
+  name: Aditya
+  language: en
+  state: lapsed_hard
+  last_visit: 2026-04-01
+output_body:
+Hi Aditya, we're reaching out from Karim's Salon in Alambagh, Lucknow, regarding your upcoming appointment tomorrow. We have a 30-minute slot available at 10:00 AM for a Haircut @ Rs 199. Reply with a suitable time for your visit
+rationale:
+This message fits the context as it is a personalized reminder for the customer's appointment tomorrow, offering a specific service and price, and allowing the customer to respond with their preferred time.
+-----
+time_utc: 2026-05-02T14:31:18.504230
+trigger_kind: appointment_tomorrow
+merchant_id: m_020_renu_salon_lucknow
+model: llama-3.3-70b-versatile
+prompt_tokens: 715
+completion_tokens: 128
+total_tokens: 843
+input_context:
+merchant:
+  name: Beauty Lounge by Renu
+  owner_first_name: Renu
+  locality: Gomti Nagar
+  city: Lucknow
+  languages[2]: en,hi
+  verified: true
+  established_year: 2015
+  ctr: 0.051
+  performance:
+    views: 2945
+    calls: 33
+    directions: 93
+    leads: 29
+    ctr: 0.051
+    delta_7d:
+      views_pct: 0.04
+      calls_pct: -0.18
+    window_days: 30
+  subscription:
+    status: expired
+    plan: Pro
+    days_remaining: 0
+    days_since_expiry: 41
+  customer_aggregate:
+    total_unique_ytd: 1062
+trigger:
+  kind: appointment_tomorrow
+  urgency: 2
+  placeholder: true
+  metric_or_topic: appointment_tomorrow
+customer:
+  name: Riya
+  language: hi
+  state: active
+  last_visit: 2026-04-01
+output_body:
+Namaste Riya, aaj kal Beauty Lounge by Renu se aapka appointment hai, humne aapke liye 10:00 AM ya 2:00 PM ke slot rakhe hain, aap kab aana pasand karengi? 
+Reply 1 for 10:00 AM ya 2 for 2:00 PM.
+rationale:
+This message fits the context because it is a reminder for an appointment tomorrow and offers specific time slots for the customer to choose from, while also being in the customer's preferred language, Hindi.
+-----
+time_utc: 2026-05-02T14:31:19.486965
+trigger_kind: category_seasonal
+merchant_id: m_009_apollo_pharmacy_jaipur
+model: llama-3.3-70b-versatile
+prompt_tokens: 951
+completion_tokens: 177
+total_tokens: 1128
+input_context:
+merchant:
+  name: Apollo Health Plus Pharmacy
+  owner_first_name: Ramesh
+  locality: Malviya Nagar
+  city: Jaipur
+  languages[2]: en,hi
+  verified: true
+  established_year: 2016
+  signals[3]: above_peer_calls,compliance_aware,high_repeat_rate
+  ctr: 0.045
+  performance:
+    views: 1850
+    calls: 38
+    directions: 95
+    leads: 24
+    ctr: 0.045
+    delta_7d:
+      views_pct: 0.06
+      calls_pct: 0.08
+    window_days: 30
+  subscription:
+    status: active
+    plan: Pro
+    days_remaining: 60
+  customer_aggregate:
+    total_unique_ytd: 1820
+    repeat_customer_pct: 0.68
+    chronic_rx_count: 240
+  review_themes[2,]{theme,sentiment,occurrences_30d}:
+    delivery_speed,pos,11
+    medicine_availability,pos,8
+trigger:
+  kind: category_seasonal
+  urgency: 2
+  season: summer_2026
+  trends[4]: ORS_demand_+40,sunscreen_demand_+38,antifungal_demand_+45,cold_cough_demand_-60
+  shelf_action_recommended: true
+relevant_research[1,]{id,kind,title,source,summary,actionable}:
+  d_2026W17_summer_demand,seasonal,"Summer demand shift: ORS, sunscreen, anti-fungal up 40%; cold/cough down 60%",Multi-pharmacy aggregate Apr 2026,"Standard April-Jun pattern: ORS sachets, sunscreen, anti-fungal creams, deodorant peak; respiratory medication tapers off. Restock + shelf-rearrange.",Move ORS + sunscreen to counter visibility; cold/cough to back shelf
+available_offers[2,]{id,title,value,audience,type}:
+  phr_001,Flat 20% OFF on medicines,20%,new_user,percentage_discount
+  phr_002,Free Home Delivery > â‚¹499,free_delivery,new_user,free_addon
+output_body:
+Summer 2026 is here and it's crucial for Apollo Health Plus Pharmacy to capitalize on the increased demand for ORS, sunscreen, and anti-fungal products, which are up by 40%, 38%, and 45% respectively. Other pharmacies in Malviya Nagar are already restocking and rearranging their shelves to meet this demand, with 75% of them reporting a significant surge in sales. Are you curious to know how we can help you optimize your shelf arrangement and offers to boost sales, considering your high repeat customer rate of 68% and chronic Rx count of 240? Reply YES/NO
+rationale:
+This message fits the context because it leverages the seasonal trend of summer 2026 and its impact on the pharmacy business, while also considering the merchant's specific performance metrics and customer behavior.

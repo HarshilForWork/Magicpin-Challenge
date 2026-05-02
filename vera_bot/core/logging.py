@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from pathlib import Path
 
 import mlflow
 
@@ -9,6 +10,48 @@ from vera_bot.utils.tokenizer import estimate_total_cost
 
 def _mlflow_enabled() -> bool:
     return not settings.get("app", {}).get("production", False)
+
+
+def _file_logging_enabled() -> bool:
+    return settings.get("app", {}).get("file_logging", False)
+
+
+def _append_file_log(
+    trigger_kind: str,
+    merchant_id: str,
+    model: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    input_context: str | None,
+    output: str,
+    rationale: str,
+) -> None:
+    base_dir = Path(__file__).resolve().parents[2]
+    log_dir = base_dir / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_path = log_dir / "llm_compositions.txt"
+
+    total_tokens = (prompt_tokens or 0) + (completion_tokens or 0)
+    entry = [
+        "-----",
+        f"time_utc: {datetime.utcnow().isoformat()}",
+        f"trigger_kind: {trigger_kind}",
+        f"merchant_id: {merchant_id}",
+        f"model: {model}",
+        f"prompt_tokens: {prompt_tokens}",
+        f"completion_tokens: {completion_tokens}",
+        f"total_tokens: {total_tokens}",
+        "input_context:",
+        input_context or "<none>",
+        "output_body:",
+        output or "<empty>",
+        "rationale:",
+        rationale or "<empty>",
+        "",
+    ]
+
+    with log_path.open("a", encoding="utf-8", errors="ignore") as handle:
+        handle.write("\n".join(entry))
 
 
 def setup_mlflow():
@@ -33,6 +76,17 @@ def log_composition(
     full_prompt: str | None = None,
 ):
     if not _mlflow_enabled() or not settings["mlflow"]["log_prompts"]:
+        if _file_logging_enabled():
+            _append_file_log(
+                trigger_kind=trigger_kind,
+                merchant_id=merchant_id,
+                model=model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                input_context=input_context,
+                output=output,
+                rationale=rationale,
+            )
         return
     
     cost_breakdown = estimate_total_cost(prompt_tokens, completion_tokens, model)
@@ -64,6 +118,18 @@ def log_composition(
         
         # Log cost breakdown as params for easy viewing
         mlflow.log_param("cost_breakdown", json.dumps(cost_breakdown, indent=2))
+
+    if _file_logging_enabled():
+        _append_file_log(
+            trigger_kind=trigger_kind,
+            merchant_id=merchant_id,
+            model=model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            input_context=input_context,
+            output=output,
+            rationale=rationale,
+        )
 
 
 def log_judge_reply(

@@ -5,6 +5,7 @@ app:
   team_members: [Alice, Bob]
   contact_email: team@example.com
   production: true
+  file_logging: true
   host: 0.0.0.0
   port: 8080
 
@@ -12,7 +13,7 @@ llm:
   provider: groq
   model: llama-3.3-70b-versatile   # switch here to change model
   max_tokens: 1000
-  temperature: 0.3
+  temperature: 0
   timeout_seconds: 20              # must stay under 30s judge limit
 
 mongodb:

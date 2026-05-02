@@ -1,23 +1,15 @@
 #!/usr/bin/env python3
 """
-magicpin AI Challenge — LLM-Powered Judge Simulator
-====================================================
+magicpin AI Challenge - LLM-Powered Judge Simulator (Expanded Dataset)
 
-A strict but fair judge that scores your bot and explains WHY.
-
-HOW TO USE:
-1. Edit the CONFIGURATION section below (lines 25-45)
-2. Set your LLM provider and API key
-3. Set your bot URL
-4. Run: python judge_simulator.py
-
-That's it!
-
-Author: magicpin AI Challenge Team
+Replica of judge_simulator with:
+- Hardcoded configuration
+- Expanded dataset loader (dataset/expanded)
+- Expanded evaluation over test_pairs
 """
 
 # =============================================================================
-# ██████  CONFIGURATION - EDIT THIS SECTION ██████
+# CONFIGURATION - HARD CODED
 # =============================================================================
 
 # Your bot's URL (where your bot is running)
@@ -26,21 +18,23 @@ BOT_URL = "http://localhost:8080"
 # Choose your LLM provider: "openai", "anthropic", "gemini", "deepseek", "groq", "ollama", "openrouter"
 LLM_PROVIDER = "groq"
 
-# Your API key (paste your key here). For Groq, prefer GROQ_API_KEY in .env.
-LLM_API_KEY = ""  # <-- Optional: used for non-Groq providers or if env is not set
+# Your API key (optional for Groq if GROQ_API_KEY is set in .env)
+LLM_API_KEY = ""
 
-# Model to use (hardcoded).
+# Model to use (leave empty to use provider default)
 LLM_MODEL = "llama-3.1-8b-instant"
 
-# For Ollama only: local server URL
-#OLLAMA_URL = "http://localhost:11434"
-
 # Which test to run by default
-TEST_SCENARIO = "all"
+TEST_SCENARIO = "expanded"
 
+# Expanded dataset size (0 = all pairs)
+EXPANDED_LIMIT = 0
+
+# Tick batch size for expanded/full evaluation
+TRIGGER_BATCH_SIZE = 5
 
 # =============================================================================
-# ██████  END OF CONFIGURATION - DON'T EDIT BELOW THIS LINE ██████
+# END OF CONFIGURATION - DON'T EDIT BELOW THIS LINE
 # =============================================================================
 
 import os
@@ -48,44 +42,21 @@ import sys
 import json
 import time
 import re
-import socket
 from datetime import datetime
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Tuple
 from pathlib import Path
 from urllib import request as urlrequest, error as urlerror
 from abc import ABC, abstractmethod
+
 from dotenv import load_dotenv
 
 _BASE_DIR = Path(__file__).parent
 load_dotenv(_BASE_DIR / ".env", override=True)
 load_dotenv(_BASE_DIR / "vera_bot" / ".env", override=True)
 
-# Allow local .env overrides so the simulator can be configured without editing this file.
-BOT_URL = os.getenv("BOT_URL", BOT_URL)
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", LLM_PROVIDER)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 LLM_API_KEY = os.getenv("LLM_API_KEY", LLM_API_KEY)
-#LLM_MODEL = os.getenv("LLM_MODEL", LLM_MODEL)
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-TEST_SCENARIO = os.getenv("TEST_SCENARIO", TEST_SCENARIO)
-
-def _load_model_from_config(default_model: str) -> str:
-    try:
-        import yaml
-        config_path = _BASE_DIR / "vera_bot" / "config.yaml"
-        if not config_path.exists():
-            return default_model
-        data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
-        llm_config = data.get("llm", {})
-        model = llm_config.get("model")
-        if isinstance(model, str) and model.strip():
-            return model.strip()
-    except Exception:
-        return default_model
-    return default_model
-
-# LLM model is hardcoded in this file; do not override from config or env.
 
 # Prefer GROQ_API_KEY for Groq provider.
 if LLM_PROVIDER == "groq" and GROQ_API_KEY:
@@ -93,56 +64,71 @@ if LLM_PROVIDER == "groq" and GROQ_API_KEY:
 
 # Constants
 TIMEOUT_LLM = 45
-DATASET_DIR = Path(__file__).parent / "dataset"
+DATASET_DIR = _BASE_DIR / "dataset" / "expanded"
 
 # =============================================================================
 # TERMINAL OUTPUT
 # =============================================================================
 
 class Colors:
-    HEADER = '\033[95m'
-    BLUE = '\033[94m'
-    CYAN = '\033[96m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    RED = '\033[91m'
-    MAGENTA = '\033[35m'
-    BOLD = '\033[1m'
-    DIM = '\033[2m'
-    RESET = '\033[0m'
+    HEADER = "\033[95m"
+    BLUE = "\033[94m"
+    CYAN = "\033[96m"
+    GREEN = "\033[92m"
+    YELLOW = "\033[93m"
+    RED = "\033[91m"
+    MAGENTA = "\033[35m"
+    BOLD = "\033[1m"
+    DIM = "\033[2m"
+    RESET = "\033[0m"
+
 
 def print_header(text: str):
     print(f"\n{Colors.HEADER}{Colors.BOLD}{'='*70}{Colors.RESET}")
     print(f"{Colors.HEADER}{Colors.BOLD}{text.center(70)}{Colors.RESET}")
     print(f"{Colors.HEADER}{Colors.BOLD}{'='*70}{Colors.RESET}\n")
 
+
 def print_section(text: str):
     print(f"\n{Colors.CYAN}{Colors.BOLD}--- {text} ---{Colors.RESET}\n")
+
 
 def print_success(text: str):
     print(f"{Colors.GREEN}[PASS]{Colors.RESET} {text}")
 
+
 def print_fail(text: str):
     print(f"{Colors.RED}[FAIL]{Colors.RESET} {text}")
+
 
 def print_warn(text: str):
     print(f"{Colors.YELLOW}[WARN]{Colors.RESET} {text}")
 
+
 def print_info(text: str):
     print(f"{Colors.BLUE}[INFO]{Colors.RESET} {text}")
 
+
 def print_llm(text: str):
     print(f"{Colors.MAGENTA}[LLM]{Colors.RESET} {text}")
+
 
 def print_score_bar(dimension: str, score: int, max_score: int = 10):
     bar_filled = int((score / max_score) * 20)
     bar_empty = 20 - bar_filled
     color = Colors.GREEN if score >= 7 else Colors.YELLOW if score >= 4 else Colors.RED
-    print(f"  {dimension:22} [{color}{'█' * bar_filled}{Colors.DIM}{'░' * bar_empty}{Colors.RESET}] {color}{score:2}/{max_score}{Colors.RESET}")
+    bar = "#" * bar_filled + "-" * bar_empty
+    print(
+        f"  {dimension:22} "
+        f"[{color}{bar}{Colors.RESET}] "
+        f"{color}{score:2}/{max_score}{Colors.RESET}"
+    )
+
 
 def print_reason(text: str):
     wrapped = text[:200] + "..." if len(text) > 200 else text
     print(f"    {Colors.DIM}{wrapped}{Colors.RESET}")
+
 
 def print_hint(hint: str):
     print(f"\n  {Colors.YELLOW}Hint:{Colors.RESET} {hint}")
@@ -169,8 +155,15 @@ class ScoreResult:
 
     @property
     def total(self) -> int:
-        return max(0, self.specificity + self.category_fit + self.merchant_fit +
-                   self.decision_quality + self.engagement_compulsion - self.penalties)
+        return max(
+            0,
+            self.specificity
+            + self.category_fit
+            + self.merchant_fit
+            + self.decision_quality
+            + self.engagement_compulsion
+            - self.penalties,
+        )
 
 # =============================================================================
 # LLM PROVIDERS
@@ -203,14 +196,14 @@ class OpenAIProvider(LLMProvider):
         body = json.dumps({
             "model": self.model,
             "messages": messages,
-            "temperature": 0.2,
-            "max_tokens": 1500
+            "temperature": 0,
+            "max_tokens": 1500,
         }).encode("utf-8")
 
         req = urlrequest.Request(
             "https://api.openai.com/v1/chat/completions",
             data=body,
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
         )
         resp = urlrequest.urlopen(req, timeout=TIMEOUT_LLM)
         data = json.loads(resp.read().decode("utf-8"))
@@ -226,16 +219,22 @@ class AnthropicProvider(LLMProvider):
         return f"Anthropic ({self.model})"
 
     def complete(self, prompt: str, system: str = None) -> str:
-        body_dict = {"model": self.model, "max_tokens": 1500,
-                     "messages": [{"role": "user", "content": prompt}]}
+        body_dict = {
+            "model": self.model,
+            "max_tokens": 1500,
+            "messages": [{"role": "user", "content": prompt}],
+        }
         if system:
             body_dict["system"] = system
 
         req = urlrequest.Request(
             "https://api.anthropic.com/v1/messages",
             data=json.dumps(body_dict).encode("utf-8"),
-            headers={"x-api-key": self.api_key, "Content-Type": "application/json",
-                     "anthropic-version": "2023-06-01"}
+            headers={
+                "x-api-key": self.api_key,
+                "Content-Type": "application/json",
+                "anthropic-version": "2023-06-01",
+            },
         )
         resp = urlrequest.urlopen(req, timeout=TIMEOUT_LLM)
         data = json.loads(resp.read().decode("utf-8"))
@@ -254,10 +253,13 @@ class GeminiProvider(LLMProvider):
         full_prompt = f"{system}\n\n{prompt}" if system else prompt
         body = json.dumps({
             "contents": [{"parts": [{"text": full_prompt}]}],
-            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1500}
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1500},
         }).encode("utf-8")
 
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{self.model}:generateContent?key={self.api_key}"
+        )
         req = urlrequest.Request(url, data=body, headers={"Content-Type": "application/json"})
         resp = urlrequest.urlopen(req, timeout=TIMEOUT_LLM)
         data = json.loads(resp.read().decode("utf-8"))
@@ -280,9 +282,13 @@ class DeepSeekProvider(LLMProvider):
 
         req = urlrequest.Request(
             "https://api.deepseek.com/v1/chat/completions",
-            data=json.dumps({"model": self.model, "messages": messages,
-                            "temperature": 0.2, "max_tokens": 1500}).encode("utf-8"),
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+            data=json.dumps({
+                "model": self.model,
+                "messages": messages,
+                "temperature": 0.2,
+                "max_tokens": 1500,
+            }).encode("utf-8"),
+            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
         )
         resp = urlrequest.urlopen(req, timeout=TIMEOUT_LLM)
         data = json.loads(resp.read().decode("utf-8"))
@@ -327,9 +333,13 @@ class OllamaProvider(LLMProvider):
         full_prompt = f"{system}\n\n{prompt}" if system else prompt
         req = urlrequest.Request(
             f"{self.api_url}/api/generate",
-            data=json.dumps({"model": self.model, "prompt": full_prompt,
-                            "stream": False, "options": {"temperature": 0.2}}).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
+            data=json.dumps({
+                "model": self.model,
+                "prompt": full_prompt,
+                "stream": False,
+                "options": {"temperature": 0.2},
+            }).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
         )
         resp = urlrequest.urlopen(req, timeout=90)
         data = json.loads(resp.read().decode("utf-8"))
@@ -352,10 +362,17 @@ class OpenRouterProvider(LLMProvider):
 
         req = urlrequest.Request(
             "https://openrouter.ai/api/v1/chat/completions",
-            data=json.dumps({"model": self.model, "messages": messages,
-                            "temperature": 0.2, "max_tokens": 1500}).encode("utf-8"),
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json",
-                     "HTTP-Referer": "https://magicpin.com"}
+            data=json.dumps({
+                "model": self.model,
+                "messages": messages,
+                "temperature": 0.2,
+                "max_tokens": 1500,
+            }).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://magicpin.com",
+            },
         )
         resp = urlrequest.urlopen(req, timeout=TIMEOUT_LLM)
         data = json.loads(resp.read().decode("utf-8"))
@@ -370,7 +387,7 @@ def create_provider() -> LLMProvider:
         "gemini": lambda: GeminiProvider(LLM_API_KEY, LLM_MODEL),
         "deepseek": lambda: DeepSeekProvider(LLM_API_KEY, LLM_MODEL),
         "groq": lambda: GroqProvider(LLM_API_KEY, LLM_MODEL),
-        "ollama": lambda: OllamaProvider(LLM_MODEL, OLLAMA_URL),
+        "ollama": lambda: OllamaProvider(LLM_MODEL, os.getenv("OLLAMA_URL", "http://localhost:11434")),
         "openrouter": lambda: OpenRouterProvider(LLM_API_KEY, LLM_MODEL),
     }
 
@@ -385,13 +402,14 @@ def create_provider() -> LLMProvider:
 # DATASET & BOT CLIENT
 # =============================================================================
 
-class DatasetLoader:
+class ExpandedDatasetLoader:
     def __init__(self, dataset_dir: Path):
         self.dataset_dir = dataset_dir
-        self.categories = {}
-        self.merchants = {}
-        self.customers = {}
-        self.triggers = {}
+        self.categories: Dict[str, Dict] = {}
+        self.merchants: Dict[str, Dict] = {}
+        self.customers: Dict[str, Dict] = {}
+        self.triggers: Dict[str, Dict] = {}
+        self.test_pairs: List[Dict] = []
 
     def load(self) -> bool:
         try:
@@ -401,22 +419,29 @@ class DatasetLoader:
                     data = json.load(open(f))
                     self.categories[data.get("slug", f.stem)] = data
 
-            for name, container, key in [
-                ("merchants_seed.json", "merchants", "merchant_id"),
-                ("customers_seed.json", "customers", "customer_id"),
-                ("triggers_seed.json", "triggers", "id")
-            ]:
-                path = self.dataset_dir / name
-                if path.exists():
-                    data = json.load(open(path))
-                    items = data.get(container, data.get(container.rstrip("s"), []))
-                    storage = getattr(self, container)
-                    for item in items:
-                        if key in item:
-                            storage[item[key]] = item
+            for f in (self.dataset_dir / "merchants").glob("*.json"):
+                data = json.load(open(f))
+                mid = data.get("merchant_id", f.stem)
+                self.merchants[mid] = data
+
+            for f in (self.dataset_dir / "customers").glob("*.json"):
+                data = json.load(open(f))
+                cid = data.get("customer_id", f.stem)
+                self.customers[cid] = data
+
+            for f in (self.dataset_dir / "triggers").glob("*.json"):
+                data = json.load(open(f))
+                tid = data.get("id", f.stem)
+                self.triggers[tid] = data
+
+            pairs_path = self.dataset_dir / "test_pairs.json"
+            if pairs_path.exists():
+                data = json.load(open(pairs_path))
+                self.test_pairs = data.get("pairs", [])
+
             return True
         except Exception as e:
-            print_fail(f"Dataset load error: {e}")
+            print_fail(f"Expanded dataset load error: {e}")
             return False
 
 
@@ -424,8 +449,13 @@ class BotClient:
     def __init__(self, base_url: str):
         self.base_url = base_url.rstrip("/")
 
-    def _request(self, method: str, path: str, timeout: int = 30,
-                 body_dict: Dict = None) -> Tuple[Optional[Dict], Optional[str], float]:
+    def _request(
+        self,
+        method: str,
+        path: str,
+        timeout: int = 30,
+        body_dict: Dict = None,
+    ) -> Tuple[Optional[Dict], Optional[str], float]:
         url = f"{self.base_url}{path}"
         start = time.time()
         body = json.dumps(body_dict).encode("utf-8") if body_dict else None
@@ -441,7 +471,7 @@ class BotClient:
                 return None, "Unauthorized", latency
             try:
                 return json.loads(e.read().decode("utf-8")), None, latency
-            except:
+            except Exception:
                 return None, f"HTTP {e.code}", latency
         except Exception as e:
             return None, str(e), (time.time() - start) * 1000
@@ -454,20 +484,28 @@ class BotClient:
 
     def push_context(self, scope, cid, version, payload):
         return self._request("POST", "/v1/context", 10, {
-            "scope": scope, "context_id": cid, "version": version,
-            "payload": payload, "delivered_at": datetime.utcnow().isoformat() + "Z"
+            "scope": scope,
+            "context_id": cid,
+            "version": version,
+            "payload": payload,
+            "delivered_at": datetime.utcnow().isoformat() + "Z",
         })
 
     def tick(self, triggers):
         return self._request("POST", "/v1/tick", 15, {
-            "now": datetime.utcnow().isoformat() + "Z", "available_triggers": triggers
+            "now": datetime.utcnow().isoformat() + "Z",
+            "available_triggers": triggers,
         })
 
     def reply(self, conv_id, merchant_id, message, turn):
         return self._request("POST", "/v1/reply", 15, {
-            "conversation_id": conv_id, "merchant_id": merchant_id, "customer_id": None,
-            "from_role": "merchant", "message": message,
-            "received_at": datetime.utcnow().isoformat() + "Z", "turn_number": turn
+            "conversation_id": conv_id,
+            "merchant_id": merchant_id,
+            "customer_id": None,
+            "from_role": "merchant",
+            "message": message,
+            "received_at": datetime.utcnow().isoformat() + "Z",
+            "turn_number": turn,
         })
 
 # =============================================================================
@@ -528,12 +566,18 @@ RESPOND ONLY WITH THIS EXACT JSON FORMAT:
   "hint": "<one sentence guidance for improvement, cryptic not direct>"
 }"""
 
-    def __init__(self, llm: LLMProvider, dataset: DatasetLoader):
+    def __init__(self, llm: LLMProvider, dataset: ExpandedDatasetLoader):
         self.llm = llm
         self.dataset = dataset
 
-    def score(self, action: Dict, category: Dict, merchant: Dict,
-              trigger: Dict, customer: Dict = None) -> ScoreResult:
+    def score(
+        self,
+        action: Dict,
+        category: Dict,
+        merchant: Dict,
+        trigger: Dict,
+        customer: Dict = None,
+    ) -> ScoreResult:
         """Score a message and return detailed results."""
 
         body = action.get("body", "")
@@ -576,7 +620,7 @@ Score each dimension 0-10 with clear reasoning. Be STRICT."""
 
     def _parse_response(self, response: str, action: Dict) -> ScoreResult:
         """Parse LLM JSON response."""
-        match = re.search(r'\{[\s\S]*\}', response)
+        match = re.search(r"\{[\s\S]*\}", response)
         if not match:
             return self._fallback_score(action)
 
@@ -589,11 +633,17 @@ Score each dimension 0-10 with clear reasoning. Be STRICT."""
                 category_fit_reason=data.get("category_fit_reason", ""),
                 merchant_fit=min(10, max(0, int(data.get("merchant_fit", 5)))),
                 merchant_fit_reason=data.get("merchant_fit_reason", ""),
-                decision_quality=min(10, max(0, int(data.get("decision_quality", data.get("trigger_relevance", 5))))),
-                decision_quality_reason=data.get("decision_quality_reason", data.get("trigger_relevance_reason", "")),
+                decision_quality=min(
+                    10,
+                    max(0, int(data.get("decision_quality", data.get("trigger_relevance", 5)))),
+                ),
+                decision_quality_reason=data.get(
+                    "decision_quality_reason",
+                    data.get("trigger_relevance_reason", ""),
+                ),
                 engagement_compulsion=min(10, max(0, int(data.get("engagement_compulsion", 5)))),
                 engagement_reason=data.get("engagement_reason", ""),
-                hint=data.get("hint", "")
+                hint=data.get("hint", ""),
             )
             return result
         except Exception as e:
@@ -603,15 +653,19 @@ Score each dimension 0-10 with clear reasoning. Be STRICT."""
     def _fallback_score(self, action: Dict) -> ScoreResult:
         """Basic fallback scoring."""
         body = action.get("body", "").lower()
-        nums = len(re.findall(r'\d+', body))
+        nums = len(re.findall(r"\d+", body))
         return ScoreResult(
             specificity=min(10, 3 + nums * 2),
             specificity_reason="Fallback: counted numbers in message",
-            category_fit=5, category_fit_reason="Could not evaluate",
-            merchant_fit=5, merchant_fit_reason="Could not evaluate",
-            decision_quality=5, decision_quality_reason="Could not evaluate",
-            engagement_compulsion=5, engagement_reason="Could not evaluate",
-            hint="LLM scoring failed - using basic heuristics"
+            category_fit=5,
+            category_fit_reason="Could not evaluate",
+            merchant_fit=5,
+            merchant_fit_reason="Could not evaluate",
+            decision_quality=5,
+            decision_quality_reason="Could not evaluate",
+            engagement_compulsion=5,
+            engagement_reason="Could not evaluate",
+            hint="LLM scoring failed - using basic heuristics",
         )
 
 # =============================================================================
@@ -622,12 +676,12 @@ class JudgeSimulator:
     def __init__(self, llm: LLMProvider):
         self.llm = llm
         self.client = BotClient(BOT_URL)
-        self.dataset = DatasetLoader(DATASET_DIR)
+        self.dataset = ExpandedDatasetLoader(DATASET_DIR)
         self.scorer: Optional[LLMScorer] = None
         self.all_scores: List[ScoreResult] = []
 
     def run(self, scenario: str) -> bool:
-        print_header(f"LLM JUDGE — {scenario.upper()}")
+        print_header(f"LLM JUDGE - {scenario.upper()}")
         print_info(f"Bot: {BOT_URL}")
         print_info(f"LLM: {self.llm.name()}")
 
@@ -636,9 +690,11 @@ class JudgeSimulator:
             return False
 
         self.scorer = LLMScorer(self.llm, self.dataset)
-        print_info(f"Loaded: {len(self.dataset.categories)} categories, "
-                   f"{len(self.dataset.merchants)} merchants, "
-                   f"{len(self.dataset.triggers)} triggers")
+        print_info(
+            f"Loaded: {len(self.dataset.categories)} categories, "
+            f"{len(self.dataset.merchants)} merchants, "
+            f"{len(self.dataset.triggers)} triggers"
+        )
 
         scenarios = {
             "warmup": self._warmup,
@@ -646,6 +702,7 @@ class JudgeSimulator:
             "auto_reply_hell": self._auto_reply,
             "intent_transition": self._intent,
             "hostile": self._hostile,
+            "expanded": self._expanded,
             "all": self._all,
             "full_evaluation": self._full,
         }
@@ -672,7 +729,7 @@ class JudgeSimulator:
         if err:
             print_warn(f"metadata: {err}")
         else:
-            print_success(f"metadata — Team: {data.get('team_name', '?')}, Model: {data.get('model', '?')}")
+            print_success(f"metadata - Team: {data.get('team_name', '?')}, Model: {data.get('model', '?')}")
 
         print_section("CONTEXT PUSH")
         for slug, cat in self.dataset.categories.items():
@@ -683,7 +740,7 @@ class JudgeSimulator:
         for mid, m in list(self.dataset.merchants.items())[:5]:
             data, err, _ = self.client.push_context("merchant", mid, 1, m)
             status = "PASS" if data and data.get("accepted") else "FAIL"
-            short_id = mid.split('_')[1] if '_' in mid else mid[:10]
+            short_id = mid.split("_")[1] if "_" in mid else mid[:10]
             print(f"  [{status}] merchant/{short_id}")
 
         return True
@@ -707,7 +764,7 @@ class JudgeSimulator:
         print_info(f"Bot returned {len(actions)} action(s) ({lat:.0f}ms)")
 
         if not actions:
-            print_warn("No actions — bot chose not to send")
+            print_warn("No actions - bot chose not to send")
             return True
 
         for action in actions:
@@ -737,9 +794,9 @@ class JudgeSimulator:
             action = data.get("action", "?")
 
             if action == "end":
-                print_success(f"Turn {i}: Bot ENDED — detected auto-reply pattern!")
+                print_success(f"Turn {i}: Bot ENDED - detected auto-reply pattern!")
                 return True
-            elif action == "wait":
+            if action == "wait":
                 wait_s = data.get("wait_seconds", "?")
                 print_success(f"Turn {i}: Bot WAITING {wait_s}s")
             else:
@@ -819,10 +876,187 @@ class JudgeSimulator:
 
         return True
 
+    def _suppression(self) -> bool:
+        print_section("SUPPRESSION CHECK")
+
+        data, err, _ = self.client.healthz()
+        if err:
+            print_fail(f"Bot unreachable: {err}")
+            return False
+
+        trigger_id = None
+        trigger = None
+        for tid, t in self.dataset.triggers.items():
+            if t.get("merchant_id"):
+                trigger_id = tid
+                trigger = t
+                break
+
+        if not trigger or not trigger_id:
+            print_warn("No trigger with merchant_id found; skipping suppression check")
+            return True
+
+        merchant_id = trigger.get("merchant_id")
+        merchant = self.dataset.merchants.get(merchant_id)
+        if not merchant:
+            print_warn("Merchant not found for suppression check")
+            return True
+
+        category_slug = merchant.get("category_slug")
+        category = self.dataset.categories.get(category_slug)
+        if category:
+            self.client.push_context("category", category_slug, 1, category)
+
+        self.client.push_context("merchant", merchant_id, 1, merchant)
+        self.client.push_context("trigger", trigger_id, 1, trigger)
+
+        data, err, _ = self.client.tick([trigger_id])
+        if err:
+            print_fail(f"tick: {err}")
+            return False
+
+        actions = data.get("actions", [])
+        if not actions:
+            print_warn("No actions returned; cannot test suppression")
+            return True
+
+        action = actions[0]
+        reject_msg = "Stop messaging me."
+        data, err, _ = self.client.reply(action.get("conversation_id"), merchant_id, reject_msg, 2)
+        if err:
+            print_fail(f"reply: {err}")
+            return False
+
+        if data.get("action") != "end":
+            print_warn("Reject did not end conversation; suppression may not be set")
+
+        next_trigger_id = None
+        for tid, t in self.dataset.triggers.items():
+            if t.get("merchant_id") == merchant_id and tid != trigger_id:
+                next_trigger_id = tid
+                break
+
+        if not next_trigger_id:
+            print_warn("No second trigger for same merchant; skipping suppression verify")
+            return True
+
+        self.client.push_context("trigger", next_trigger_id, 2, self.dataset.triggers[next_trigger_id])
+        data, err, _ = self.client.tick([next_trigger_id])
+        if err:
+            print_fail(f"tick: {err}")
+            return False
+
+        if data.get("actions"):
+            print_fail("Suppression check failed: actions returned for suppressed merchant")
+            return False
+
+        print_success("Suppression check passed (no actions after reject)")
+        return True
+
+    def _expanded(self) -> bool:
+        if not self._warmup():
+            return False
+
+        if not self._auto_reply():
+            print_warn("Auto-reply check failed")
+        if not self._suppression():
+            print_warn("Suppression check failed")
+
+        print_section("EXPANDED EVALUATION")
+
+        if not self.dataset.test_pairs:
+            print_fail("Expanded test_pairs.json is empty")
+            return False
+
+        if EXPANDED_LIMIT <= 0:
+            limit = len(self.dataset.test_pairs)
+        else:
+            limit = max(1, min(EXPANDED_LIMIT, len(self.dataset.test_pairs)))
+
+        pairs = self.dataset.test_pairs[:limit]
+        run_id = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        run_version = int(time.time())
+
+        print_info(
+            f"Expanded pairs: {limit} of {len(self.dataset.test_pairs)}"
+        )
+
+        pushed_categories = set()
+        pushed_triggers = set()
+
+        for pair in pairs:
+            trigger_id = pair.get("trigger_id")
+            merchant_id = pair.get("merchant_id")
+            customer_id = pair.get("customer_id")
+
+            trigger = self.dataset.triggers.get(trigger_id)
+            merchant = self.dataset.merchants.get(merchant_id)
+
+            if not trigger or not merchant:
+                print_warn(f"Missing data for pair {pair.get('test_id', '?')}")
+                continue
+
+            category_slug = merchant.get("category_slug")
+            category = self.dataset.categories.get(category_slug)
+            if category and category_slug not in pushed_categories:
+                self.client.push_context("category", category_slug, 1, category)
+                pushed_categories.add(category_slug)
+
+            self.client.push_context("merchant", merchant_id, 1, merchant)
+
+            if customer_id:
+                customer = self.dataset.customers.get(customer_id)
+                if customer:
+                    self.client.push_context("customer", customer_id, 1, customer)
+                else:
+                    print_warn(f"Customer missing: {customer_id}")
+
+            if trigger_id and trigger_id not in pushed_triggers:
+                trigger_payload = json.loads(json.dumps(trigger))
+                base_key = trigger_payload.get("suppression_key", "")
+                trigger_payload["suppression_key"] = f"{base_key}:exp:{run_id}:{pair.get('test_id', '')}"
+                self.client.push_context("trigger", trigger_payload["id"], run_version, trigger_payload)
+                pushed_triggers.add(trigger_id)
+
+        trigger_ids = []
+        seen = set()
+        for pair in pairs:
+            trigger_id = pair.get("trigger_id")
+            if trigger_id and trigger_id in self.dataset.triggers and trigger_id not in seen:
+                trigger_ids.append(trigger_id)
+                seen.add(trigger_id)
+
+        if not trigger_ids:
+            print_fail("No triggers found for expanded pairs")
+            return False
+
+        print_section("SCORING COMPOSITIONS")
+        for i in range(0, len(trigger_ids), TRIGGER_BATCH_SIZE):
+            batch = trigger_ids[i:i + TRIGGER_BATCH_SIZE]
+            data, err, lat = self.client.tick(batch)
+
+            if err:
+                print_warn(f"Tick failed: {err}")
+                continue
+
+            actions = data.get("actions", [])
+            print_info(f"Batch {i // TRIGGER_BATCH_SIZE + 1}: {len(actions)} actions ({lat:.0f}ms)")
+
+            for action in actions:
+                self._score_and_display(action, verbose=False)
+
+        return True
+
     def _all(self) -> bool:
         results = []
-        for name, fn in [("warmup", self._warmup), ("auto_reply", self._auto_reply),
-                         ("intent", self._intent), ("hostile", self._hostile)]:
+        for name, fn in [
+            ("warmup", self._warmup),
+            ("auto_reply", self._auto_reply),
+            ("intent", self._intent),
+            ("hostile", self._hostile),
+            ("suppression", self._suppression),
+            ("expanded", self._expanded),
+        ]:
             try:
                 results.append((name, fn()))
             except Exception as e:
@@ -851,8 +1085,8 @@ class JudgeSimulator:
         print_section("SCORING COMPOSITIONS")
         tids = list(self.dataset.triggers.keys())
 
-        for i in range(0, len(tids), 5):
-            batch = tids[i:i+5]
+        for i in range(0, len(tids), TRIGGER_BATCH_SIZE):
+            batch = tids[i:i + TRIGGER_BATCH_SIZE]
             data, err, lat = self.client.tick(batch)
 
             if err:
@@ -860,7 +1094,7 @@ class JudgeSimulator:
                 continue
 
             actions = data.get("actions", [])
-            print_info(f"Batch {i//5 + 1}: {len(actions)} actions ({lat:.0f}ms)")
+            print_info(f"Batch {i // TRIGGER_BATCH_SIZE + 1}: {len(actions)} actions ({lat:.0f}ms)")
 
             for action in actions:
                 self._score_and_display(action, verbose=False)
@@ -868,7 +1102,6 @@ class JudgeSimulator:
         return True
 
     def _score_and_display(self, action: Dict, verbose: bool = True):
-        """Score an action and display results."""
         tid = action.get("trigger_id", "")
         mid = action.get("merchant_id", "")
         cid = action.get("customer_id")
@@ -927,7 +1160,7 @@ class JudgeSimulator:
             merchant_fit=sum(s.merchant_fit for s in self.all_scores) // n,
             decision_quality=sum(s.decision_quality for s in self.all_scores) // n,
             engagement_compulsion=sum(s.engagement_compulsion for s in self.all_scores) // n,
-            penalties=sum(s.penalties for s in self.all_scores)
+            penalties=sum(s.penalties for s in self.all_scores),
         )
 
         print_info(f"Messages scored: {n}\n")
@@ -957,13 +1190,12 @@ class JudgeSimulator:
 # =============================================================================
 
 def main():
-    print_header("magicpin AI Challenge — LLM Judge")
+    print_header("magicpin AI Challenge - LLM Judge (Expanded)")
 
     # Validate configuration
     if LLM_PROVIDER != "ollama" and not LLM_API_KEY:
         print_fail("LLM_API_KEY is not set!")
-        print_info("Edit the CONFIGURATION section at the top of this file")
-        print_info("Set your API key for your chosen provider")
+        print_info("Set your API key in .env or the configuration section at the top of this file")
         sys.exit(1)
 
     # Create LLM provider
