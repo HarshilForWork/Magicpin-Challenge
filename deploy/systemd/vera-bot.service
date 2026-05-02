@@ -1,0 +1,14 @@
+[Unit]
+Description=Vera Bot (Docker)
+After=docker.service network.target
+Requires=docker.service
+
+[Service]
+Restart=always
+RestartSec=5
+ExecStartPre=-/usr/bin/docker rm -f vera-bot
+ExecStart=/usr/bin/docker run --name vera-bot --env-file /etc/vera_bot/.env -p 8080:8080 ghcr.io/harshilforwork/magicpin-challenge:main
+ExecStop=/usr/bin/docker stop vera-bot
+
+[Install]
+WantedBy=multi-user.target
