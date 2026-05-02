@@ -24,16 +24,16 @@ Author: magicpin AI Challenge Team
 BOT_URL = "http://localhost:8080"
 
 # Choose your LLM provider: "openai", "anthropic", "gemini", "deepseek", "groq", "ollama", "openrouter"
-LLM_PROVIDER = "openai"
+LLM_PROVIDER = "groq"
 
-# Your API key (paste your key here)
-LLM_API_KEY = ""  # <-- PUT YOUR API KEY HERE
+# Your API key (paste your key here). For Groq, prefer GROQ_API_KEY in .env.
+LLM_API_KEY = ""  # <-- Optional: used for non-Groq providers or if env is not set
 
-# Model to use (leave empty for default, or specify like "gpt-4o", "claude-3-5-sonnet-20241022", etc.)
-LLM_MODEL = ""  # <-- Optional: specify model or leave empty for default
+# Model to use (leave empty for default). For Groq, default comes from vera_bot/config.yaml.
+LLM_MODEL = ""
 
 # For Ollama only: local server URL
-OLLAMA_URL = "http://localhost:11434"
+#OLLAMA_URL = "http://localhost:11434"
 
 # Which test to run by default
 TEST_SCENARIO = "all"
@@ -54,6 +54,43 @@ from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 from urllib import request as urlrequest, error as urlerror
 from abc import ABC, abstractmethod
+from dotenv import load_dotenv
+
+_BASE_DIR = Path(__file__).parent
+load_dotenv(_BASE_DIR / ".env", override=True)
+load_dotenv(_BASE_DIR / "vera_bot" / ".env", override=True)
+
+# Allow local .env overrides so the simulator can be configured without editing this file.
+BOT_URL = os.getenv("BOT_URL", BOT_URL)
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", LLM_PROVIDER)
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+LLM_API_KEY = os.getenv("LLM_API_KEY", LLM_API_KEY)
+LLM_MODEL = os.getenv("LLM_MODEL", LLM_MODEL)
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+TEST_SCENARIO = os.getenv("TEST_SCENARIO", TEST_SCENARIO)
+
+def _load_model_from_config(default_model: str) -> str:
+    try:
+        import yaml
+        config_path = _BASE_DIR / "vera_bot" / "config.yaml"
+        if not config_path.exists():
+            return default_model
+        data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+        llm_config = data.get("llm", {})
+        model = llm_config.get("model")
+        if isinstance(model, str) and model.strip():
+            return model.strip()
+    except Exception:
+        return default_model
+    return default_model
+
+# Use model from config.yaml unless explicitly overridden in env.
+if not os.getenv("LLM_MODEL"):
+    LLM_MODEL = _load_model_from_config(LLM_MODEL)
+
+# Prefer GROQ_API_KEY for Groq provider.
+if LLM_PROVIDER == "groq" and GROQ_API_KEY:
+    LLM_API_KEY = GROQ_API_KEY
 
 # Constants
 TIMEOUT_LLM = 45
@@ -267,15 +304,16 @@ class GroqProvider(LLMProvider):
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        req = urlrequest.Request(
-            "https://api.groq.com/openai/v1/chat/completions",
-            data=json.dumps({"model": self.model, "messages": messages,
-                            "temperature": 0.2, "max_tokens": 1500}).encode("utf-8"),
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        from groq import Groq
+
+        client = Groq(api_key=self.api_key)
+        resp = client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=0.2,
+            max_completion_tokens=1500,
         )
-        resp = urlrequest.urlopen(req, timeout=TIMEOUT_LLM)
-        data = json.loads(resp.read().decode("utf-8"))
-        return data["choices"][0]["message"]["content"]
+        return resp.choices[0].message.content
 
 
 class OllamaProvider(LLMProvider):

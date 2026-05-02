@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+motor
+pymongo
+groq
+pydantic
+pydantic-settings
+python-dotenv
+mlflow
+pyyaml
+httpx
+python-toon

@@ -1,0 +1,47 @@
+app:
+  name: vera-bot
+  version: 1.2.0
+  team_name: Team Alpha
+  team_members: [Alice, Bob]
+  contact_email: team@example.com
+  host: 0.0.0.0
+  port: 8080
+
+llm:
+  provider: groq
+  model: llama-3.3-70b-versatile   # switch here to change model
+  max_tokens: 1000
+  temperature: 0.3
+  timeout_seconds: 20              # must stay under 30s judge limit
+
+mongodb:
+  uri: mongodb://localhost:27017   # override with env var MONGO_URI
+  database: vera_bot
+  collections:
+    contexts: contexts
+    conversations: conversations
+    suppressed: suppressed
+
+mlflow:
+  experiment_name: vera-bot-compositions
+  log_prompts: true
+  log_filter_results: true
+  log_judge_replies: true
+  log_scores: true
+
+suppression:
+  auto_reply_wait_seconds: 14400    # 4 hours on first auto reply
+  auto_reply_wait_long_seconds: 86400  # 24 hours on second
+  hostile_suppress_days: 30
+
+composer:
+  max_body_chars: 1000
+  min_body_chars: 50
+  max_retries: 2                   # re-prompt if validation fails
+
+context:
+  max_digest_items: 1
+  max_offers: 2
+  max_content_items: 1
+  max_seasonal_items: 1
+  max_history_turns: 6             # last N turns to pass to LLM
