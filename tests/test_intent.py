@@ -27,7 +27,7 @@ class DummyClientAccept:
 
 def test_classify_intent_empty_response_returns_unclear():
     async def run():
-        with patch("handlers.intent._get_client", return_value=DummyClientEmpty()):
+        with patch("vera_bot.handlers.intent._get_client", return_value=DummyClientEmpty()):
             return await intent_handler.classify_intent("ok")
 
     label = asyncio.run(run())
@@ -36,7 +36,7 @@ def test_classify_intent_empty_response_returns_unclear():
 
 def test_classify_intent_accept_label():
     async def run():
-        with patch("handlers.intent._get_client", return_value=DummyClientAccept()):
+        with patch("vera_bot.handlers.intent._get_client", return_value=DummyClientAccept()):
             return await intent_handler.classify_intent("ok")
 
     label = asyncio.run(run())

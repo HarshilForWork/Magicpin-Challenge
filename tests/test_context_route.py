@@ -21,8 +21,8 @@ def test_push_context_accepts_new_version():
 
     save_mock = AsyncMock()
 
-    with patch("api.routes.context.state.get_context_version", new=AsyncMock(return_value=0)), \
-         patch("api.routes.context.state.save_context", new=save_mock):
+    with patch("vera_bot.api.routes.context.state.get_context_version", new=AsyncMock(return_value=0)), \
+         patch("vera_bot.api.routes.context.state.save_context", new=save_mock):
         result = asyncio.run(context_route.push_context(body))
 
     assert result.accepted is True
@@ -35,9 +35,9 @@ def test_push_context_idempotent_same_payload():
 
     save_mock = AsyncMock()
 
-    with patch("api.routes.context.state.get_context_version", new=AsyncMock(return_value=1)), \
-         patch("api.routes.context.state.get_context", new=AsyncMock(return_value=payload)), \
-         patch("api.routes.context.state.save_context", new=save_mock):
+    with patch("vera_bot.api.routes.context.state.get_context_version", new=AsyncMock(return_value=1)), \
+         patch("vera_bot.api.routes.context.state.get_context", new=AsyncMock(return_value=payload)), \
+         patch("vera_bot.api.routes.context.state.save_context", new=save_mock):
         result = asyncio.run(context_route.push_context(body))
 
     assert result.accepted is True
@@ -48,7 +48,7 @@ def test_push_context_rejects_stale_version():
     payload = {"slug": "gyms"}
     body = _make_request(payload, version=1)
 
-    with patch("api.routes.context.state.get_context_version", new=AsyncMock(return_value=2)):
+    with patch("vera_bot.api.routes.context.state.get_context_version", new=AsyncMock(return_value=2)):
         result = asyncio.run(context_route.push_context(body))
 
     assert result.accepted is False
